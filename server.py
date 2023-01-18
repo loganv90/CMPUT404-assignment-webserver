@@ -1,7 +1,7 @@
 #  coding: utf-8 
-import socketserver
+import socketserver, os
 
-# Copyright 2013 Abram Hindle, Eddie Antonio Santos
+# Copyright 2023 Logan Vaughan, Abram Hindle, Eddie Antonio Santos
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,11 +28,62 @@ import socketserver
 
 
 class MyWebServer(socketserver.BaseRequestHandler):
+
+
+    def get_response(self, path):
+        base_path = "./www/" + path
+
+        if not os.path.exists(base_path) or ".." in os.path.normpath(base_path):
+            return "HTTP/1.1 404 Not Found\r\n\n"
+
+        if os.path.isdir(base_path) and not base_path.endswith('/'):
+            return "HTTP/1.1 301 Moved Permenantly\r\nLocation: " + path + "/\r\n\n"
+
+        if os.path.isdir(base_path) and not os.path.exists(base_path + "index.html"):
+            return "HTTP/1.1 404 Not Found\r\n\n"
+
+        if os.path.isdir(base_path):
+            response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\n"
+            with open(base_path + "index.html", 'r') as f:
+                response += f.read()
+            return response
+
+        if os.path.exists(base_path) and base_path.endswith('.html'):
+            response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\n"
+            with open(base_path, 'r') as f:
+                response += f.read()
+            return response
+
+        if os.path.exists(base_path) and base_path.endswith('.css'):
+            response = "HTTP/1.1 200 OK\r\nContent-Type: text/css\r\n\n"
+            with open(base_path, 'r') as f:
+                response += f.read()
+            return response
+
+        if os.path.exists(base_path):
+            response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\n"
+            with open(base_path, 'r') as f:
+                response += f.read()
+            return response
+
+        return "HTTP/1.1 404 Not Found\r\n\n"
     
+
     def handle(self):
         self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s\n" % self.data)
-        self.request.sendall(bytearray("OK",'utf-8'))
+        #print("Got a request of:\n%s\n" % self.data)
+
+        request_info = self.data.decode("utf-8").split("\r\n")[0].split(" ")
+        response = ''
+        
+        if len(request_info) < 2 or request_info[0].upper() != "GET":
+            response = "HTTP/1.1 405 Method Not Allowed\r\n\n"
+        else:
+            response = self.get_response(request_info[1])
+
+        self.request.sendall(bytearray(response,'utf-8'))
+        #print("Sent a response of:\n%s\n" % response)
+
 
 if __name__ == "__main__":
     HOST, PORT = "localhost", 8080
